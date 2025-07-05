@@ -27,16 +27,16 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "boto3>=1.26.84",
-    "moto[s3]>=5.0.0",
+    "moto[s3]>=4.1.4",
     "pytest-cov>=4.0.0",
     "pytest-httpx>=0.21.3",
-    "pytest>=7.2.1,<8",  # Some tests fail on v8, not found quite why
+    "pytest>=7.2.1",
     "stream-zip>=0.0.57",
 ]
 
 [project.urls]
 "Documentation" = "https://stream-read-xbrl.docs.trade.gov.uk/"
-"Source" = "https://github.com/uktrade/stream-read-xbrl"
+"Source" = "https://github.com/mrbrianevans/stream-read-xbrl"
 
 [tool.hatch.build]
 include = [

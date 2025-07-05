@@ -4,33 +4,33 @@ In most cases to contribute you will need a [GitHub account](https://github.com/
 
 ## Contributing an Issue
 
-Suspected issues with stream-read-xbrl can be submitted at the [stream-read-xbrl Issues page](https://github.com/uktrade/stream-read-xbrl/issues).
+Suspected issues with stream-read-xbrl can be submitted at the [stream-read-xbrl Issues page](https://github.com/mrbrianevans/stream-read-xbrl/issues).
 An issue that contains a [minimal, reproducible example](https://stackoverflow.com/help/minimal-reproducible-example) stands the best chance of being resolved. However, it is understood that this is not possible in all circumstances.
 
 
 ## Contributing a Feature Request
 
-A feature request can be submitted using the [Ideas category in the stream-read-xbrl discussions](https://github.com/uktrade/stream-read-xbrl/discussions/categories/ideas).
+A feature request can be submitted using the [Ideas category in the stream-read-xbrl discussions](https://github.com/mrbrianevans/stream-read-xbrl/discussions/categories/ideas).
 
 ## Contributing documentation or code
 
-To contribute changes to documentation or code, you will need the source of stream-read-xbrl locally. The instructions for this depend on if you are a member of the [uktrade GitHub organisation](https://github.com/uktrade). In both cases, experience of working with source code, working on the command line, and working with git is helpful.
+To contribute changes to documentation or code, you will need the source of stream-read-xbrl locally. The instructions for this depend on if you are a member. In both cases, experience of working with source code, working on the command line, and working with git is helpful.
 
-### If you’re a member of uktrade
+### If you’re a member
 
 1. [Setup an SSH key and associate it with your GitHub account] (https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)
 
 2. Clone the repository
 
     ```bash
-    git clone git@github.com:uktrade/stream-read-xbrl.git
+    git clone git@github.com:mrbrianevans/stream-read-xbrl.git
     cd stream-read-xbrl
     ```
 
-You should not fork the repository if you're a member of uktrade.
+You should not fork the repository if you're a member.
 
 
-### If you’re not a member of uktrade
+### If you’re not a member
 
 1.[Setup an SSH key and associate it with your GitHub account](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account).
 
@@ -41,7 +41,7 @@ You should not fork the repository if you're a member of uktrade.
     cd stream-read-xbrl
     ```
 
-3.[Fork the repository](https://github.com/uktrade/stream-unzip/fork). Make a note of the "Owner" that you fork to. This is usually your username.
+3.[Fork the repository](https://github.com/mrbrianevans/stream-unzip/fork). Make a note of the "Owner" that you fork to. This is usually your username.
   
   There is more documentation on forking in [GitHub's guide on contributing to projects](https://docs.github.com/en/get-started/quickstart/contributing-to-projects).
   
@@ -54,7 +54,7 @@ You should not fork the repository if you're a member of uktrade.
 
 ## Contributing documentation
 
-The source of the documentation is in the [docs/](https://github.com/uktrade/stream-read-xbrl/tree/main/docs) directory of the source code, and is written using [Material for mkdocs](https://squidfunk.github.io/mkdocs-material/).
+The source of the documentation is in the [docs/](https://github.com/mrbrianevans/stream-read-xbrl/tree/master/docs) directory of the source code, and is written using [Material for mkdocs](https://squidfunk.github.io/mkdocs-material/).
 
 Changes are then submitted via a Pull Request (PR). To do this:
 
@@ -84,7 +84,7 @@ Changes are then submitted via a Pull Request (PR). To do this:
     gir push origin docs/add-example
     ```
     
-6. Raise a PR at [https://github.com/uktrade/stream-read-xbrl/pulls](https://github.com/uktrade/stream-read-xbrl/pulls) against the main branch in stream-unzip.
+6. Raise a PR at [https://github.com/mrbrianevans/stream-read-xbrl/pulls](https://github.com/mrbrianevans/stream-read-xbrl/pulls) against the master branch in stream-unzip.
 
 7. Wait for the PR to be approved and merged, and respond to any questions or suggested changes.
 
@@ -114,7 +114,7 @@ Changes are then submitted via a Pull Request (PR). To do this:
     pytest
     ```
     
-4. Make your changes in a text editor. In the cases of changing behaviour, this would usually include changing or adding at least one test in [test_stream_read_xbrl.py](https://github.com/uktrade/stream-unzip/blob/main/test_stream_read_xbrl.py), and running them.
+4. Make your changes in a text editor. In the cases of changing behaviour, this would usually include changing or adding at least one test in [test_stream_read_xbrl.py](https://github.com/mrbrianevans/stream-unzip/blob/master/test_stream_read_xbrl.py), and running them.
 
     ```bash
     pytest
@@ -128,6 +128,6 @@ Changes are then submitted via a Pull Request (PR). To do this:
     git push origin fix/the-bug-description
     ```
     
-6. Raise a PR at https://github.com/uktrade/stream-read-xbrl/pulls(https://github.com/uktrade/stream-read-xbrl/pulls) against the main branch in stream-read-xbrl.
+6. Raise a PR at https://github.com/mrbrianevans/stream-read-xbrl/pulls(https://github.com/mrbrianevans/stream-read-xbrl/pulls) against the master branch in stream-read-xbrl.
 
 7. Wait for the PR to be approved and merged, and respond to any questions or suggested changes.

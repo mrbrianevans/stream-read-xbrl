@@ -1,6 +1,6 @@
 site_name: stream-read-xbrl
-repo_name: uktrade/stream-read-xbrl
-repo_url: https://github.com/uktrade/stream-read-xbrl
+repo_name: mrbrianevans/stream-read-xbrl
+repo_url: https://github.com/mrbrianevans/stream-read-xbrl
 theme:
   name: tech_docs_template
   logo: assets/dit-logo.png

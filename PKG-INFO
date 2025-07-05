@@ -1,3 +1,29 @@
+Metadata-Version: 2.1
+Name: stream-read-xbrl
+Version: 0.0.43
+Summary: Python package to parse Companies House accounts data in a streaming way
+Project-URL: Documentation, https://stream-read-xbrl.docs.trade.gov.uk/
+Project-URL: Source, https://github.com/uktrade/stream-read-xbrl
+Author-email: Department for International Trade <sre@digital.trade.gov.uk>
+License-File: LICENSE
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.8.0
+Requires-Dist: beautifulsoup4>=4.9.3
+Requires-Dist: httpx>=0.23.3
+Requires-Dist: lxml>=4.9.2
+Requires-Dist: python-dateutil>=2.8.2
+Requires-Dist: stream-unzip>=0.0.83
+Provides-Extra: dev
+Requires-Dist: boto3>=1.26.84; extra == 'dev'
+Requires-Dist: moto[s3]>=4.1.4; extra == 'dev'
+Requires-Dist: pytest-cov>=4.0.0; extra == 'dev'
+Requires-Dist: pytest-httpx>=0.21.3; extra == 'dev'
+Requires-Dist: pytest>=7.2.1; extra == 'dev'
+Requires-Dist: stream-zip>=0.0.57; extra == 'dev'
+Description-Content-Type: text/markdown
+
 <!-- --8<-- [start:intro] -->
 # stream-read-xbrl
 

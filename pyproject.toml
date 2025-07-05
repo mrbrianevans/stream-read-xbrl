@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "stream-read-xbrl"
-version = "0.0.30"
+version = "0.0.43"
 authors = [
   { name="Department for International Trade", email="sre@digital.trade.gov.uk" },
 ]
 description = "Python package to parse Companies House accounts data in a streaming way"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8.0"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",

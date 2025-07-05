@@ -2,14 +2,13 @@ import csv
 import datetime
 import hashlib
 import logging
-import multiprocessing
-import multiprocessing.pool
 import os
 import re
 import sys
 import urllib.parse
 from dataclasses import dataclass
-from collections import defaultdict
+from collections import defaultdict, deque
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from decimal import Decimal
 from itertools import chain
@@ -63,29 +62,11 @@ _COLUMNS = (
     'profit_loss_on_ordinary_activities_before_tax',
     'tax_on_profit_or_loss_on_ordinary_activities',
     'profit_loss_for_period',
-    'zip_url'
+    'error',
+    'zip_url',
 )
 
 logger = logging.getLogger(__name__)
-
-
-@contextmanager
-def _get_default_pool():
-    # Based on https://stackoverflow.com/a/71503165/1319998 that allows the pool to run
-    # inside a daemon, for example in Airflow
-    p = multiprocessing.process.current_process()
-    daemon_status_set = 'daemon' in p._config
-    daemon_status_value = p._config.get('daemon')
-
-    if daemon_status_set:
-        del p._config['daemon']
-
-    try:
-        with multiprocessing.pool.Pool(processes=max(os.cpu_count() - 1, 1)) as pool:
-             yield pool
-    finally:
-        if daemon_status_set:
-            p._config['daemon'] = daemon_status_value
 
 
 def _xbrl_to_rows(name_xbrl_xml_str_orig):
@@ -106,12 +87,19 @@ def _xbrl_to_rows(name_xbrl_xml_str_orig):
 
     def _parse_str(element, text):
         return str(text).replace('\n', ' ').replace('"', '')
+    
+    def _parse_absolute(element, text):
+        # Some cases where employee numbers have a negative sign attached,
+        # seemingly indicating negative employee numbers
+        return abs(_parse_decimal_with_colon_or_dash(element, text))
 
     def _parse_decimal(element, text):
         sign = -1 if element.get('sign', '') == '-' else +1
         text_without_thousands_separator = \
+            text.replace('.', '').replace(',', '.') if element.get('format', '').rpartition(':')[2] == 'numdotcomma' else \
             text.replace(' ', '') if element.get('format', '').rpartition(':')[2] == 'numspacedot' else \
             text.replace(',', '')
+
         return sign * Decimal(text_without_thousands_separator) * Decimal(10) ** Decimal(element.get('scale', '0'))
 
     def _parse_decimal_with_colon_or_dash(element, text):
@@ -120,9 +108,16 @@ def _xbrl_to_rows(name_xbrl_xml_str_orig):
         return _parse(element, re.sub(r'(.*:)|(.+- )', '', text), _parse_decimal)
 
     def _parse_date(element, text):
-        if element.get('format','').rpartition(':')[2].lower() == 'datedaymonthyear':
-            return dateutil.parser.parse(text, dayfirst=True).date()
-        return _date(text)
+        format = element.get('format','').rpartition(':')[2].lower()
+        day_first = format in ('datedaymonthyear', 'dateslasheu', 'datedoteu')
+        if format == 'datedaymonthyearen':
+            text = text.replace(' ','')
+        text = re.sub(r"(?i)(\d)((st)|(nd)|(rd)|(th))", r"\1", text)
+        try:
+            return dateutil.parser.parse(text, dayfirst=day_first).date()
+        except dateutil.parser.ParserError:
+            # Try to parse mis-spellings that still have the first 3 characters right
+            return dateutil.parser.parse(re.sub(r'([a-zA-Z]+)', lambda m: m.group(0)[:3], text), dayfirst=day_first).date()
 
     def _parse_bool(element, text):
         return False if text == 'false' else True if text == 'true' else None
@@ -191,10 +186,10 @@ def _xbrl_to_rows(name_xbrl_xml_str_orig):
         ),
         'average_number_employees_during_period': (
             [
-                (_av('AverageNumberEmployeesDuringPeriod'), _parse_decimal_with_colon_or_dash),
-                (_av('EmployeesTotal'), _parse_decimal_with_colon_or_dash),
-                (_tn('AverageNumberEmployeesDuringPeriod'), _parse_decimal_with_colon_or_dash),
-                (_tn('EmployeesTotal'), _parse_decimal_with_colon_or_dash),
+                (_av('AverageNumberEmployeesDuringPeriod'), _parse_absolute),
+                (_av('EmployeesTotal'), _parse_absolute),
+                (_tn('AverageNumberEmployeesDuringPeriod'), _parse_absolute),
+                (_tn('EmployeesTotal'), _parse_absolute),
             ]
         ),
     }
@@ -477,7 +472,8 @@ def _xbrl_to_rows(name_xbrl_xml_str_orig):
             return
 
         for element in test.search(element, local_name, attribute_value, context_ref):
-            value = _parse(element, element.text, parse)
+            filtered = ((e.text or '') for e in element.iter() if e.tag.rpartition('}')[2] != "exclude")
+            value = _parse(element, ''.join(filtered), parse)
             if value is not None:
                 general_attributes_with_priorities[name] = (priority, value)
                 break
@@ -495,53 +491,71 @@ def _xbrl_to_rows(name_xbrl_xml_str_orig):
             if priority >= best_priority:
                 return
 
-            value = _parse(element, element.text, parse)
+            filtered = ((e.text or '') for e in element.iter() if etree.QName(e).localname != "exclude")
+            value = _parse(element, ''.join(filtered), parse)
             if value is not None:
                 periodic_attributes_with_priorities[dates][name] = (priority, value)
                 break
 
-    for element in document.xpath('//*'):
-        _, _, local_name = element.tag.rpartition('}')
-        _, _, attribute_value = element.get('name', '').rpartition(':')
-        context_ref = element.get('contextRef', '')
+    error = None
+    try:          
+        for element in document.xpath('//*'):
+            _, _, local_name = element.tag.rpartition('}')
+            _, _, attribute_value = element.get('name', '').rpartition(':')
+            context_ref = element.get('contextRef', '')
 
-        for name, priority, test, parse in chain(tag_name_tests(local_name), attribute_value_tests(attribute_value), CUSTOM_TESTS):
-            handler = \
-                handle_general if name in general_attributes_with_priorities else \
-                handle_periodic
+            for name, priority, test, parse in chain(tag_name_tests(local_name), attribute_value_tests(attribute_value), CUSTOM_TESTS):
+                handler = \
+                    handle_general if name in general_attributes_with_priorities else \
+                    handle_periodic
 
-            handler(element, local_name, attribute_value, context_ref, name, priority, test, parse)
+                handler(element, local_name, attribute_value, context_ref, name, priority, test, parse)
 
-    general_attributes = tuple(
-        general_attributes_with_priorities[name][1]
-        for name in GENERAL_XPATH_MAPPINGS.keys()
-    )
-
-    periods = tuple(
-        (datetime.date.fromisoformat(period_start_end[0]), datetime.date.fromisoformat(period_start_end[1]))
-        + tuple(
-            periodic_attributes[name][1]
-            for name in PERIODICAL_XPATH_MAPPINGS.keys()
+        general_attributes = tuple(
+            general_attributes_with_priorities[name][1]
+            for name in GENERAL_XPATH_MAPPINGS.keys()
         )
-        for period_start_end, periodic_attributes in periodic_attributes_with_priorities.items()
-    )
-    sorted_periods = sorted(periods, key=lambda period: (period[0], period[1]), reverse=True)
+
+        periods = tuple(
+            (datetime.date.fromisoformat(period_start_end[0]), datetime.date.fromisoformat(period_start_end[1]))
+            + tuple(
+                periodic_attributes[name][1]
+                for name in PERIODICAL_XPATH_MAPPINGS.keys()
+            )
+            for period_start_end, periodic_attributes in periodic_attributes_with_priorities.items()
+        )
+        sorted_periods = sorted(periods, key=lambda period: (period[0], period[1]), reverse=True)
+    except ValueError as e:
+        error = str(e)
 
     return \
-        tuple((core_attributes + general_attributes + period) for period in sorted_periods) if sorted_periods else \
-        ((core_attributes + general_attributes + (None,) * (2 + len(PERIODICAL_XPATH_MAPPINGS))),)
+        ((core_attributes + (None,) * (2 + len(GENERAL_XPATH_MAPPINGS) + len(PERIODICAL_XPATH_MAPPINGS)) + (error,)),) if error is not None else \
+        tuple((core_attributes + general_attributes + period + (None,)) for period in sorted_periods) if sorted_periods else \
+        ((core_attributes + general_attributes + (None,) * (3 + len(PERIODICAL_XPATH_MAPPINGS))),)
 
 
 @contextmanager
 def stream_read_xbrl_zip(
     zip_bytes_iter,
-    get_pool=_get_default_pool,
     zip_url=None,
 ):
-    with get_pool() as pool:
+    queue = deque()
+    num_workers = max(os.cpu_count() - 1, 1)
+
+    def imap(executor, func, param_iterables):
+        for params in param_iterables:
+            if len(queue) == num_workers:
+                yield queue.popleft().result()
+
+            queue.append(executor.submit(func, params))
+
+        while queue:
+            yield queue.popleft().result()
+
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
         yield _COLUMNS, (
             row + (zip_url,)
-            for results in pool.imap(_xbrl_to_rows, ((name.decode(), b''.join(chunks)) for name, _, chunks in stream_unzip(zip_bytes_iter)))
+            for results in imap(executor, _xbrl_to_rows, ((name.decode(), b''.join(chunks)) for name, _, chunks in stream_unzip(zip_bytes_iter)))
             for row in results
         )
 
@@ -555,6 +569,7 @@ def stream_read_xbrl_sync(
         'https://download.companieshouse.gov.uk/historicmonthlyaccountsdata.html',
     ),
     get_client = lambda: httpx.Client(timeout=60.0, transport=httpx.HTTPTransport(retries=3)),
+    chunk_size = 100 * 1048576  # 100 MiB
 ):
     def extract_start_end_dates(url):
         file_basename = os.path.basename(url)
@@ -582,9 +597,45 @@ def stream_read_xbrl_sync(
             return (None, None)
 
     def get_content(client, url):
-        r = httpx.get(url)
+        r = client.get(url)
         r.raise_for_status()
         return r.content
+
+    @contextmanager
+    def get_content_streamed(client, url):
+
+        def get_chunks():
+            start = 0
+            end = chunk_size - 1
+            etag = None
+            remaining = None
+
+            while remaining is None or remaining > 0:
+                with client.stream('GET', url, headers={
+                    'range': f'bytes={start}-{end}'
+                }) as r:
+                    r.raise_for_status()
+                    if etag is None:
+                        etag = r.headers['etag']
+                    else:
+                        if etag != r.headers['etag']:
+                            raise Exception('etag has changed since beginning requests')     
+                    if remaining is None:
+                        remaining = int(r.headers['content-range'].split('/')[1])
+                    content_length =int(r.headers['content-length'])
+                    assert content_length > 0
+                    remaining -= content_length
+                    yield from r.iter_bytes(chunk_size=65536)
+                start += chunk_size
+                end += chunk_size
+
+        chunks = get_chunks()
+        try:
+            yield chunks
+        finally:
+            # This is for the case of unfinished iteration. It raises a GeneratorExit in get_chunks, so any
+            # open context in "get_chunks" gets properly closed, i.e. to close its open HTTP connection
+            chunks.close()
 
     dummy_list_to_ingest = [
         (datetime.date(2021, 5, 2), (('1', '2'), ('3', '4'))),
@@ -628,9 +679,8 @@ def stream_read_xbrl_sync(
 
         def _final_date_and_rows():
             for zip_url, (start_date, end_date) in zip_urls_with_date_in_range_to_ingest:
-                with client.stream('GET', zip_url) as r:
-                    r.raise_for_status()
-                    with stream_read_xbrl_zip(r.iter_bytes(chunk_size=65536), zip_url=zip_url) as (_, rows):
+                with get_content_streamed(client, zip_url) as chunks:
+                    with stream_read_xbrl_zip(chunks, zip_url=zip_url) as (_, rows):
                         yield (start_date, end_date), rows
 
         yield (_COLUMNS, _final_date_and_rows())

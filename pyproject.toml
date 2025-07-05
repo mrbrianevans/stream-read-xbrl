@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "stream-read-xbrl"
-version = "0.0.43"
+version = "0.0.44"
 authors = [
   { name="Department for International Trade", email="sre@digital.trade.gov.uk" },
 ]
@@ -27,7 +27,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "boto3>=1.26.84",
-    "moto[s3]>=4.1.4",
+    "moto[s3]>=5.0.0",
     "pytest-cov>=4.0.0",
     "pytest-httpx>=0.21.3",
     "pytest>=7.2.1",
